@@ -5,7 +5,7 @@
 // (npm install javascript-obfuscator, ou ajoute-la à la main et laisse ton
 // hébergeur réinstaller les dépendances au prochain déploiement).
 
-import { downloadMediaMessage } from 'baileys';
+import { downloadMediaMessage } from '@whiskeysockets/baileys';
 import JavaScriptObfuscator from 'javascript-obfuscator';
 
 // Réglages pensés pour du Node.js serveur (pas du JS navigateur) : selfDefending
