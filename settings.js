@@ -42,22 +42,23 @@ export default {
     // Doit être un lien direct vers une image (se terminant par .jpg/.png ...)
     menuImage: 'https://tinyurl.com/22h73wdy',
 
+    // ── Liens affichés dans le message de connexion (welcome) ───────────────
+    groupLink:   'https://chat.whatsapp.com/F9yJB6Xnbks55gS6URvdX2',
+    youtubeLink: 'https://youtube.com/@akanefx-j3k9o?si=cPol4CQyEg0Ei2rJ',
+
     // ── Chaîne WhatsApp officielle ──────────────────────────────────────────
-    // Lien d'invitation (celui qu'on partage / affiche partout dans le bot).
-    channelLink: 'https://whatsapp.com/channel/0029Vb865EJ0QeapgV7MkP2D',
+    // Lien d'invitation : affiché dans le welcome ET utilisé par boutons.js
+    // (tag « Voir la chaîne » + abonnement automatique).
+    channelLink: 'https://whatsapp.com/channel/0029VbE3PI53WHTgnzuQ4Z2l',
 
     // Nom affiché sur le tag "chaîne officielle" ajouté à chaque message du
     // bot (boutons.js) et dans le message d'abonnement automatique.
     channelName: 'Suivre la chaîne ᥲkᥲᥒᥱ mძ ᥎2 sur WhatsApp',
 
-    // ⚠️ Le JID technique de la chaîne (ex: "1203...@newsletter", utilisé pour
-    // l'auto-abonnement et le tag "forwardé depuis") est différent du lien
-    // d'invitation ci-dessus et ne peut PAS être deviné à partir de lui.
-    // Le JID actuel dans boutons.js (channelJid) correspond déjà à ce lien
-    // s'il n'a jamais été changé. Si jamais tu passes à une AUTRE chaîne,
-    // récupère le nouveau JID avec sock.newsletterMetadata(<code d'invite>,
-    // 'invite') puis remplace channelJid ci-dessous.
-    channelJid: '120363423070848478@newsletter',
+    // JID technique de la chaîne (xxxx@newsletter). Laisse '' : boutons.js le
+    // retrouve tout seul à partir de channelLink au démarrage. Tu peux aussi le
+    // forcer ici (obtenu avec la commande .getjid).
+    channelJid: '',
 
     // Code de connexion personnalisé (pairing code), ex: 'AKANEMD9'
     // Doit faire EXACTEMENT 8 caractères, lettres et/ou chiffres (A-Z, 0-9).
