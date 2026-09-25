@@ -2,7 +2,7 @@
 //   {prefix}voir  -> révèle DANS le groupe (ou le chat courant)
 //   {prefix}save  -> révèle en MESSAGE PRIVÉ (DM), jamais dans le groupe
 
-import { downloadMediaMessage } from 'baileys';
+import { downloadMediaMessage } from '@whiskeysockets/baileys';
 
 // Déballe le conteneur view-once s'il existe (selon la version du client WhatsApp
 // qui a envoyé le message, la structure diffère légèrement).
