@@ -1,6 +1,6 @@
 // plugins/url.js
 
-import { downloadMediaMessage } from 'baileys';
+import { downloadMediaMessage } from '@whiskeysockets/baileys';
 import { fileTypeFromBuffer } from 'file-type';
 import axios from 'axios';
 import FormData from 'form-data';
