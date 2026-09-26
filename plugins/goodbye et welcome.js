@@ -31,7 +31,20 @@ const SIGN = '> *BY DEV AKANE 🌹*'
 const line = (txt) => `*${B} ${txt}*`
 // ligne avec libellé : *┃ · ͟͟͞͞➳❥* *LIBELLÉ :* valeur
 const field = (label, value) => `*${B}* *${label} :* ${value}`
+// ligne : *┃ · ͟͟͞͞➳❥* valeur (B en gras, reste en texte normal)
+const bTag = (value) => `*${B}* ${value}`
 
+// bloc lien du bot façon "donjon" (utilisé par welcome/goodbye/graduation/rétrogradation)
+function botLinkBlock(icon = '┃') {
+    return [
+        `*┠─ 🄱🄾🅃 🄻🄸🄽🄺*`,
+        `${icon}${BOT_LINK}`,
+        END,
+        SIGN
+    ].join('\n')
+}
+
+// gardé pour compat : bloc de contact détaillé (bot / telegram / mail)
 function contactBlock(config) {
     return [
         `*${t(config, 'wgCustomBot')}*`,
@@ -47,30 +60,31 @@ function contactBlock(config) {
     ].join('\n')
 }
 
-function welcomeText(config, tags, members) {
+function welcomeText(config, tags, groupName, members, rankLabel) {
     return [
         TOP,
-        field(t(config, 'wgWelcomeTitle'), tags),
-        members ? field(t(config, 'wgMembers'), `*_${members}_*`) : '',
-        line(t(config, 'wgWelcomeLine1')),
-        line(t(config, 'wgWelcomeLine2')),
+        bTag(tags),
+        line(`${t(config, 'wgWelcomeLine1')} :`),
+        bTag(groupName),
         `*${BRAND}*`,
-        END,
-        contactBlock(config)
-    ].filter(Boolean).join('\n')
+        field(t(config, 'wgMembers'), `*_${members}_*`),
+        field(t(config, 'wgRank'), `*_${rankLabel}_*`),
+        botLinkBlock('┃')
+    ].join('\n')
 }
 
-function goodbyeText(config, tags, members) {
+function goodbyeText(config, tags, groupName, members, rankLabel) {
     return [
         TOP,
-        field(t(config, 'wgGoodbyeTitle'), tags),
-        members ? field(t(config, 'wgMembers'), `*_${members}_*`) : '',
-        line(t(config, 'wgGoodbyeLine1')),
+        bTag(tags),
+        line(`${t(config, 'wgGoodbyeLine1')} :`),
+        bTag(`(${groupName})`),
         line(t(config, 'wgGoodbyeLine2')),
         `*${BRAND}*`,
-        END,
-        contactBlock(config)
-    ].filter(Boolean).join('\n')
+        field(t(config, 'wgMembers'), `*_${members}_*`),
+        field(t(config, 'wgRank'), `*_${rankLabel}_*`),
+        botLinkBlock('┃')
+    ].join('\n')
 }
 
 // Cadre simple pour les réponses aux commandes (.welcome / .goodbye)
@@ -138,12 +152,32 @@ function _floodAllowed(group) {
 }
 
 // ───────── Groupe / image ─────────
-async function getMemberCount(client, group) {
+async function getGroupInfo(client, group) {
     try {
         const meta = await client.groupMetadata(group)
-        return meta?.participants?.length || 0
+        return {
+            members: meta?.participants?.length || 0,
+            name: meta?.subject || 'Groupe'
+        }
     } catch {
-        return 0
+        return { members: 0, name: 'Groupe' }
+    }
+}
+
+// Rang affiché dans welcome/goodbye : dépend du plugin rank-system.js s'il est présent.
+// Import optionnel pour ne jamais faire planter welcome/goodbye si rank-system.js n'existe pas.
+let _getRankLabel = null
+try {
+    const rankMod = await import('./rank-system.js')
+    _getRankLabel = rankMod.getRankLabel || null
+} catch {
+    _getRankLabel = null
+}
+function rankLabelOf(group, number) {
+    try {
+        return (_getRankLabel && _getRankLabel(group, number)) || 'E'
+    } catch {
+        return 'E'
     }
 }
 
@@ -218,9 +252,10 @@ export default {
 
                 if (!jids.length) return
 
-                const members = await getMemberCount(client, group)
+                const { members, name: groupName } = await getGroupInfo(client, group)
                 const tags = jids.map(j => `@${_num(j)}`).join(' ')
-                const text = welcomeText(config, tags, members)
+                // Nouveau membre = toujours rang E (rang de base)
+                const text = welcomeText(config, tags, groupName, members, 'E')
 
                 await sendWithImage(client, group, text, jids, WELCOME_IMG)
                 return
@@ -239,9 +274,11 @@ export default {
 
                 if (!jids.length) return
 
-                const members = await getMemberCount(client, group)
+                const { members, name: groupName } = await getGroupInfo(client, group)
                 const tags = jids.map(j => `@${_num(j)}`).join(' ')
-                const text = goodbyeText(config, tags, members)
+                // Rang du membre qui part (le plus haut rang si plusieurs partent d'un coup)
+                const rankLabel = rankLabelOf(group, _num(jids[0]))
+                const text = goodbyeText(config, tags, groupName, members, rankLabel)
 
                 await sendWithImage(client, group, text, jids, GOODBYE_IMG)
             }
