@@ -1,6 +1,6 @@
-// plugins/voir.js — Révèle un média "vue unique" (view once) cité
-//   {prefix}voir  -> révèle DANS le groupe (ou le chat courant)
-//   {prefix}save  -> révèle en MESSAGE PRIVÉ (DM), jamais dans le groupe
+// plugins/voir.js — Révèle un média "vue unique" (view once) cité, envoyé en MESSAGE PRIVÉ (DM)
+//   {prefix}voir  -> révèle en DM
+//   {prefix}vv    -> alias identique à voir
 
 import { downloadMediaMessage } from '@whiskeysockets/baileys';
 
@@ -13,31 +13,15 @@ function unwrapViewOnce(msg) {
     return msg;
 }
 
-function getRawText(message) {
-    return message.message?.conversation
-        || message.message?.extendedTextMessage?.text
-        || '';
-}
-
 async function handler(client, message, args, ctx) {
-    const jid = message.key.remoteJid;
-
-    // Le handler est partagé entre .voir et .save : on relit le texte brut pour
-    // savoir laquelle des deux commandes a été invoquée.
-    const bodyText = getRawText(message);
-    const invoked  = (bodyText.slice(ctx.prefix.length).trim().split(/\s+/)[0] || '').toLowerCase();
-    const isSave   = invoked === 'save';
-
-    // .voir -> jid actuel (le groupe, si utilisé en groupe).
-    // .save -> toujours le DM de la personne, jamais le groupe.
-    const sender     = message.key.participant || jid;
-    const destination = isSave ? sender : jid;
+    const jid    = message.key.remoteJid;
+    const sender = message.key.participant || jid;
 
     const rawQuoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
 
     if (!rawQuoted) {
         return client.sendMessage(jid, {
-            text: ctx.box(['👁️ Voir', `réponds à un média vue unique avec ${ctx.prefix}${invoked || 'voir'}`])
+            text: ctx.box(['👁️ Voir', `réponds à un média vue unique avec ${ctx.prefix}voir ou ${ctx.prefix}vv`])
         }, { quoted: message });
     }
 
@@ -48,30 +32,29 @@ async function handler(client, message, args, ctx) {
         return client.sendMessage(jid, { text: ctx.box('❌ Aucun média vue unique trouvé dans le message cité') }, { quoted: message });
     }
 
-    // Message d'attente : le média vue unique peut mettre quelques secondes à
-    // se télécharger (surtout vidéo/audio) — on prévient pour éviter que la
-    // personne pense que la commande n'a pas marché.
-    const waitMsg = await client.sendMessage(jid, {
-        text: ctx.box('⏳ Récupération du média en cours, patiente un instant…'),
-    }, { quoted: message });
+    // Légende d'origine du média (si l'expéditeur en avait mis une) ; à défaut, texte générique.
+    const originalCaption = inner.imageMessage?.caption || inner.videoMessage?.caption || '';
+    const caption = originalCaption
+        ? ctx.box('👁️ Média vue unique révélé', originalCaption)
+        : ctx.box('👁️ Média vue unique révélé');
 
     try {
         const fakeMsg = { key: { ...message.key }, message: inner };
         const buffer  = await downloadMediaMessage(fakeMsg, 'buffer', {});
-        if (!buffer || !buffer.length) throw new Error('Téléchargement impossible — le média a peut-être expiré ou déjà été vu ailleurs');
+        if (!buffer || !buffer.length) throw new Error('Téléchargement impossible');
 
         if (inner.imageMessage) {
-            await client.sendMessage(destination, { image: buffer, caption: ctx.box('👁️ Média vue unique révélé') });
+            await client.sendMessage(sender, { image: buffer, caption });
         } else if (inner.videoMessage) {
-            await client.sendMessage(destination, { video: buffer, caption: ctx.box('👁️ Média vue unique révélé') });
+            await client.sendMessage(sender, { video: buffer, caption });
         } else {
-            await client.sendMessage(destination, { audio: buffer, mimetype: 'audio/mp4', ptt: inner.audioMessage?.ptt || false });
-            await client.sendMessage(destination, { text: ctx.box('👁️ Média vue unique révélé') });
+            await client.sendMessage(sender, { audio: buffer, mimetype: 'audio/mp4', ptt: inner.audioMessage?.ptt || false });
+            await client.sendMessage(sender, { text: caption });
         }
 
-        // Si envoyé en DM depuis un groupe, petite confirmation dans le groupe
-        // (sans révéler le contenu) pour que la personne sache où regarder.
-        if (isSave && jid.endsWith('@g.us')) {
+        // Petite confirmation dans le groupe (sans révéler le contenu) pour que la
+        // personne sache où regarder — seulement si la commande venait d'un groupe.
+        if (jid.endsWith('@g.us')) {
             await client.sendMessage(jid, {
                 text: ctx.box('✅ Envoyé en message privé'),
                 mentions: [sender]
@@ -79,23 +62,14 @@ async function handler(client, message, args, ctx) {
         }
     } catch (err) {
         console.error('❌ Erreur voir:', err.message);
-        // Cause la plus fréquente : le média vue unique a déjà été ouvert une
-        // fois (par n'importe qui) — WhatsApp supprime alors la clé de
-        // déchiffrement et le téléchargement devient définitivement impossible,
-        // même pour un bot. Ce n'est pas un bug du plugin.
-        return client.sendMessage(jid, {
-            text: ctx.box(
-                ['❌ Impossible de récupérer ce média', err.message],
-                ['ℹ️ Raison probable', 'le média a déjà été ouvert une fois (WhatsApp supprime alors la clé) — ça ne vient pas du bot']
-            ),
-        }, { quoted: message });
+        return client.sendMessage(jid, { text: ctx.box(['❌ Erreur', err.message]) }, { quoted: message });
     }
 }
 
 export default {
     name: 'voir',
-    commands: ['voir', 'save'],
+    commands: ['voir', 'vv'],
     category: 'outils',
-    description: 'Révèle un média vue unique cité — voir : dans le groupe, save : en message privé',
+    description: 'Révèle en message privé un média vue unique cité (voir / vv)',
     handler,
 };
