@@ -1,15 +1,36 @@
 // boutons.js
-// 1) Tag "Voir la chaîne officielle 📢" ajouté à chaque message envoyé par le bot
-// 2) Abonnement automatique du numéro à la chaîne WhatsApp AKANE MD v2 à la connexion
+// Bouton "Voir la chaîne" (cta_url) ajouté aux messages TEXTE envoyés par le bot
+// + abonnement automatique du numéro à la chaîne WhatsApp AKANE MD à la connexion.
+//
+// ⚠️ IMPORTANT : @whiskeysockets/baileys (le core officiel) n'a AUCUN support pour
+// interactiveButtons dans sock.sendMessage() — la clé est silencieusement ignorée
+// (c'est exactement pour ça que le message arrivait "Transféré" mais sans bouton :
+// seul contextInfo.isForwarded passait, interactiveButtons était juste jeté).
+// Un vrai bouton natif doit être construit à la main (proto + noeuds binaires
+// biz/native_flow/bot) et envoyé via relayMessage — voir baileys-buttons.mjs,
+// à placer dans le même dossier que ce fichier.
+//
+// Le bouton s'ajoute aux messages TEXTE et aux messages IMAGE/VIDÉO avec légende
+// (les @mentions sont conservées). Les autres types (audio, document, sticker,
+// GIF, vue unique) gardent seulement le tag "chaîne officielle" (isForwarded).
+//
+// Utilisation du bouton lien perso, depuis n'importe quel plugin (en plus du
+// bouton "Voir la chaîne" qui est ajouté automatiquement) :
+//   client.sendMessage(jid, {
+//       text: 'Regarde ça 👀',
+//       link: { url: 'https://example.com', text: 'Ouvrir le lien' },
+//   }, { quoted: message });
+//
+// - `link` accepte aussi juste une string ('https://...') → texte par défaut "Ouvrir le lien".
+// - Jusqu'à 2 liens en passant un tableau : link: [{ url, text }, { url, text }]
+//   (1 place est toujours réservée au bouton "Voir la chaîne", max 3 boutons WhatsApp).
+
+import settings from './settings.js';
+import { sendUrlButtons } from 'buttons.mjs';
 
 const canalInfo = {
     isForwarded: true,
-    forwardingScore: 1,
-    forwardedNewsletterMessageInfo: {
-        newsletterJid: "120363423070848478@newsletter",
-        serverMessageId: 100,
-        newsletterName: "Voir la chaîne officielle 📢"
-    }
+    forwardingScore: 1
 };
 
 // Types de contenu qui acceptent un contextInfo.
@@ -17,35 +38,85 @@ const canalInfo = {
 const CONTENT_KEYS = ['text', 'image', 'video', 'audio', 'document', 'sticker', 'location', 'contacts'];
 
 // À appeler une fois juste après makeWASocket() : enveloppe sock.sendMessage pour que
-// TOUS les messages (commandes, plugins, menu, jeux...) portent le tag de la chaîne,
-// sans avoir à modifier chaque commande.
+// TOUS les messages texte (commandes, plugins, menu, jeux...) portent le bouton
+// "Voir la chaîne", sans avoir à modifier chaque commande.
 function applyCanalInfo(sock) {
 
     if (sock.__canalInfoApplied) return sock;
 
     const originalSendMessage = sock.sendMessage.bind(sock);
 
-    sock.sendMessage = (jid, content, options) => {
+    sock.sendMessage = async (jid, content, options = {}) => {
 
-        try {
+        // Un plugin peut passer { skipCanal: true } dans les options pour que
+        // CE message précis n'ait jamais le tag/bouton "chaîne officielle"
+        // (ex: one-shot, one-shot2, big-citation).
+        const skipCanal = options.skipCanal === true;
+        const forwardedOptions = { ...options };
+        delete forwardedOptions.skipCanal;
 
-            const skip = !content
-                || typeof content !== 'object'
-                || typeof jid !== 'string'
-                || jid.endsWith('@newsletter')
-                || jid === 'status@broadcast'
-                || !CONTENT_KEYS.some(key => key in content);
+        const skip = skipCanal
+            || !content
+            || typeof content !== 'object'
+            || typeof jid !== 'string'
+            || jid.endsWith('@newsletter')
+            || jid === 'status@broadcast'
+            || !CONTENT_KEYS.some(key => key in content);
 
-            if (!skip) {
+        // Cas texte / image / vidéo (avec légende) : vrai bouton natif "Voir la chaîne"
+        // (+ liens éventuels passés via content.link), envoyé via le helper interactive.
+        const isText = typeof content.text === 'string';
+        const isMedia = !isText && (content.image || content.video) && !content.viewOnce && !content.gifPlayback;
 
-                // Si une commande définit déjà son propre contextInfo, il garde la priorité
-                content = { ...content, contextInfo: { ...canalInfo, ...(content.contextInfo || {}) } };
+        if (!skip && (isText || isMedia) && !content.interactiveButtons) {
+
+            try {
+
+                const rawLinks = content.link
+                    ? (Array.isArray(content.link) ? content.link : [content.link])
+                    : [];
+
+                const linkButtons = rawLinks
+                    .filter(Boolean)
+                    .slice(0, 2) // 1 place réservée au bouton "Voir la chaîne" (max 3)
+                    .map((l) => typeof l === 'string'
+                        ? { displayText: 'Ouvrir le lien', url: l }
+                        : { displayText: l.text || 'Ouvrir le lien', url: l.url })
+                    .filter((b) => b.url);
+
+                const buttons = [...linkButtons, { displayText: 'Voir la chaîne', url: settings.channelLink }]
+                    .filter((b) => b.url)
+                    .slice(0, 3);
+
+                return await sendUrlButtons(sock, jid, {
+                    text: (isText ? content.text : content.caption) || ' ',
+                    footer: content.footer,
+                    title: content.title,
+                    quoted: forwardedOptions.quoted,
+                    image: isMedia ? content.image : undefined,
+                    video: isMedia ? content.video : undefined,
+                    // Les @mentions (tagall, welcome, goodbye...) doivent être conservées
+                    mentions: content.mentions || content.contextInfo?.mentionedJid,
+                    buttons,
+                });
+
+            } catch (err) {
+
+                console.warn('⚠️ Envoi du bouton "Voir la chaîne" échoué, envoi en texte simple :', err.message);
+                // On continue ci-dessous : envoi normal en fallback, avec juste le tag forwardé.
 
             }
 
-        } catch {}
+        }
 
-        return originalSendMessage(jid, content, options);
+        if (!skip) {
+            content = {
+                ...content,
+                contextInfo: { ...canalInfo, ...(content.contextInfo || {}) }
+            };
+        }
+
+        return originalSendMessage(jid, content, forwardedOptions);
 
     };
 
@@ -59,17 +130,16 @@ function applyCanalInfo(sock) {
 // Appelée quand un numéro se connecte au bot (connection === 'open'), qu'il
 // s'agisse du bot principal ou d'une sous-session créée via .pair / le site.
 // Chaque numéro qui se connecte est ainsi automatiquement ajouté à la chaîne
-// AKANE MD v2, pour recevoir les mises à jour et les infos du bot.
+// AKANE MD, pour recevoir les mises à jour et les infos du bot.
 const followedNumbers = new Set();
 
 async function followOfficialChannel(sock) {
 
-    const jid = canalInfo.forwardedNewsletterMessageInfo.newsletterJid;
+    const jid = settings.channelJid;
     const number = (sock.user?.id || '').split(':')[0].split('@')[0];
 
     if (!jid || !number || followedNumbers.has(number)) return false;
 
-    // sock.newsletterFollow existe sur les forks Baileys récents (dont crysnovax/baileys).
     if (typeof sock.newsletterFollow !== 'function') {
 
         console.warn('⚠️ sock.newsletterFollow indisponible : abonnement automatique à la chaîne désactivé.');
@@ -81,7 +151,7 @@ async function followOfficialChannel(sock) {
 
         await sock.newsletterFollow(jid);
         followedNumbers.add(number);
-        console.log(`📢 +${number} ajouté automatiquement à la chaîne AKANE MD v2`);
+        console.log(`📢 +${number} ajouté automatiquement à la chaîne AKANE MD`);
         return true;
 
     } catch (err) {
