@@ -26,7 +26,7 @@
 //   (1 place est toujours réservée au bouton "Voir la chaîne", max 3 boutons WhatsApp).
 
 import settings from './settings.js';
-import { sendUrlButtons } from 'buttons.mjs';
+import { sendUrlButtons } from './buttons.mjs';
 
 const canalInfo = {
     isForwarded: true,
