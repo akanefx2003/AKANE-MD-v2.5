@@ -35,7 +35,7 @@ export default {
 
     // Lien affiché comme "LIEN DU BOT" (fr) / "BOT-LINK" (en) dans le menu
     // et dans les cartes de commandes (song, etc.)
-    botLink: 'https://urls.fr/MjktBF',
+    botLink: 'https://website-v2-5.onrender.com',
 
     // Lien direct (URL) vers l'image utilisée comme photo du menu (.menu)
     // par défaut / secours, si aucune image spécifique n'est définie ci-dessous.
@@ -63,7 +63,7 @@ export default {
     // Code de connexion personnalisé (pairing code), ex: 'AKANEMD9'
     // Doit faire EXACTEMENT 8 caractères, lettres et/ou chiffres (A-Z, 0-9).
     // Laisse vide ('') pour que WhatsApp génère un code aléatoire à chaque fois.
-    pairingCode: 'JPXFRD99',
+    pairingCode: 'AKANEMD9',
 
     // ── Images centralisées ─────────────────────────────────────────────────
     // Toutes les images utilisées par le bot (menu, sous-menus, commandes,
